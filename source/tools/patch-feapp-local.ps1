@@ -35,7 +35,7 @@ if ($mainFiles.Count -ne 1) { throw "expected one main-*.js, got $($mainFiles.Co
 $utf8 = New-Object System.Text.UTF8Encoding $false
 $mainPath = $mainFiles[0].FullName
 $text = [IO.File]::ReadAllText($mainPath, $utf8)
-$patchMarker = '/*OliviaSoulPatch:mail-music-v11*/'
+$patchMarker = '/*OliviaSoulPatch:mail-music-v19*/'
 if ($text.Contains($patchMarker)) { throw "original feapp already contains current patch" }
 $text = $patchMarker + $text
 $endpoints = @(
@@ -108,6 +108,18 @@ $midiListCount = ([regex]::Matches($text, [regex]::Escape($midiListFrom))).Count
 if ($midiListCount -ne 1) { throw "expected one midi listJobs fetch, got $midiListCount" }
 $text = $text.Replace($midiListFrom, $midiListTo)
 
+$midiJobsFrom = 'async function ds(e,t){return Te.get("/midi/listJobs",{params:e,...t}).then(s=>s.data)}'
+$midiJobsTo = 'async function ds(e,t){if(Ie().isOfflineMode)return{list:[],hasMore:!1,nextCursor:0,total:0};return Te.get("/midi/listJobs",{params:e,...t}).then(s=>s.data)}'
+$midiJobsCount = ([regex]::Matches($text, [regex]::Escape($midiJobsFrom))).Count
+if ($midiJobsCount -ne 1) { throw "expected one midi listJobs client wrapper, got $midiJobsCount" }
+$text = $text.Replace($midiJobsFrom, $midiJobsTo)
+
+$userSongsFrom = 'async function dm(e,t){return Te.get("/searchUserSongs",{params:e,...t}).then(s=>({...s.data,list:(s.data.list??[]).map(i=>{const l=i;return{...l,id:l.userSongId}})}))}'
+$userSongsTo = 'async function dm(e,t){if(Ie().isOfflineMode)return{list:[],hasMore:!1,nextCursor:0,total:0};return Te.get("/searchUserSongs",{params:e,...t}).then(s=>({...s.data,list:(s.data.list??[]).map(i=>{const l=i;return{...l,id:l.userSongId}})}))}'
+$userSongsCount = ([regex]::Matches($text, [regex]::Escape($userSongsFrom))).Count
+if ($userSongsCount -ne 1) { throw "expected one searchUserSongs client wrapper, got $userSongsCount" }
+$text = $text.Replace($userSongsFrom, $userSongsTo)
+
 $musicFeaturesDisabled = 'N3=!0,Ss=!1,wa=({onComplete'
 $musicFeaturesEnabled = 'N3=!0,Ss=!0,wa=({onComplete'
 $musicFeaturesCount = ([regex]::Matches($text, [regex]::Escape($musicFeaturesDisabled))).Count
@@ -137,8 +149,8 @@ $videoReplyCount = ([regex]::Matches($text, [regex]::Escape($videoReplyFrom))).C
 if ($videoReplyCount -ne 1) { throw "expected one reply video mapping, got $videoReplyCount" }
 $text = $text.Replace($videoReplyFrom, $videoReplyTo)
 
-$startupUser = 'const oe=await Dn({hideToast:!0,loading:!0}),{status:Ce,modelGatewayToken:Fe}=oe;oe.userInfo&&Ie().setUserProfile(oe.userInfo),P.value'
-$offlineUser = 'const oe=await Dn({hideToast:!0,loading:!0}),{status:Ce,modelGatewayToken:Fe}=oe;oe.uid!==void 0&&l.setUid(oe.uid.toString()),oe.userInfo&&Ie().setUserProfile(oe.userInfo),P.value'
+$startupUser = 'if(E.value){await z();return}if(!T.value){s.replace({name:ve.Login});return}const oe=await Dn({hideToast:!0,loading:!0}),{status:Ce,modelGatewayToken:Fe}=oe;oe.userInfo&&Ie().setUserProfile(oe.userInfo),P.value'
+$offlineUser = 'if(E.value){try{const oe=await Dn({hideToast:!0});l.setUid(!oe.uid||String(oe.uid)==="0"?"":String(oe.uid)),oe.userInfo&&Ie().setUserProfile(oe.userInfo)}catch(_oe){}await z();return}if(!T.value){s.replace({name:ve.Login});return}const oe=await Dn({hideToast:!0,loading:!0}),{status:Ce,modelGatewayToken:Fe}=oe;l.setUid(!oe.uid||String(oe.uid)==="0"?"":String(oe.uid)),oe.userInfo&&Ie().setUserProfile(oe.userInfo),P.value'
 $startupUserCount = ([regex]::Matches($text, [regex]::Escape($startupUser))).Count
 if ($startupUserCount -ne 1) { throw "expected one startup user mapping, got $startupUserCount" }
 $text = $text.Replace($startupUser, $offlineUser)
@@ -183,6 +195,72 @@ $collectionAddTo = 'const G=async C=>{const D=await An({itemType:pt.PERFORMANCE,
 $collectionAddCount = ([regex]::Matches($text, [regex]::Escape($collectionAddFrom))).Count
 if ($collectionAddCount -ne 1) { throw "expected one Collection add-playlist call, got $collectionAddCount" }
 $text = $text.Replace($collectionAddFrom, $collectionAddTo)
+
+$offlineUidFallbackFrom = 'const M=s.uid||b1;s.setUid(M)'
+$offlineUidFallbackTo = 'const M=!s.uid||String(s.uid)==="0"?"0":String(s.uid);s.setUid(M==="0"?"":M)'
+$offlineUidFallbackCount = ([regex]::Matches($text, [regex]::Escape($offlineUidFallbackFrom))).Count
+if ($offlineUidFallbackCount -ne 1) { throw "expected one offline uid 10000 fallback, got $offlineUidFallbackCount" }
+$text = $text.Replace($offlineUidFallbackFrom, $offlineUidFallbackTo)
+
+$uidStoreFrom = 'E=J=>{y.value=J,Me.setCommonValues({"x-uid":J})}'
+$uidStoreTo = 'E=J=>{const N=!J||String(J)==="0"?"":String(J);y.value=N,Me.setCommonValues({"x-uid":N||"0"})}'
+$uidStoreCount = ([regex]::Matches($text, [regex]::Escape($uidStoreFrom))).Count
+if ($uidStoreCount -ne 1) { throw "expected one setUid store assignment, got $uidStoreCount" }
+$text = $text.Replace($uidStoreFrom, $uidStoreTo)
+
+$nativeUidFrom = 'h=async(M,A,G)=>{r1({uid:M});const z=await Ym({uid:M,gwToken:A,newUser:G||void 0,level:s.appMode});'
+$nativeUidTo = 'h=async(M,A,G)=>{const U=!M||String(M)==="0"?"0":String(M);r1({uid:U});const z=await Ym({uid:U,gwToken:A,newUser:G||void 0,level:s.appMode});'
+$nativeUidCount = ([regex]::Matches($text, [regex]::Escape($nativeUidFrom))).Count
+if ($nativeUidCount -ne 1) { throw "expected one native startClientApp uid call, got $nativeUidCount" }
+$text = $text.Replace($nativeUidFrom, $nativeUidTo)
+
+$watermarkHideFrom = 'if(!t.uid)return"none";const i=document.createElement("canvas")'
+$watermarkHideTo = 'if(!t.uid||String(t.uid)==="0")return"none";const i=document.createElement("canvas")'
+$watermarkHideCount = ([regex]::Matches($text, [regex]::Escape($watermarkHideFrom))).Count
+if ($watermarkHideCount -ne 1) { throw "expected one watermark empty-uid skip, got $watermarkHideCount" }
+$text = $text.Replace($watermarkHideFrom, $watermarkHideTo)
+
+$watermarkMountFrom = 'o(T)?(r(),F(ye,{key:0,uid:o(T)},null,8,["uid"])):Y("",!0)'
+$watermarkMountTo = '!o(T)||String(o(T))==="0"?Y("",!0):(r(),F(ye,{key:0,uid:o(T)},null,8,["uid"]))'
+$watermarkMountCount = ([regex]::Matches($text, [regex]::Escape($watermarkMountFrom))).Count
+if ($watermarkMountCount -ne 1) { throw "expected one watermark overlay mount, got $watermarkMountCount" }
+$text = $text.Replace($watermarkMountFrom, $watermarkMountTo)
+
+$watermarkStyleFrom = 'return(i,l)=>(r(),_("div",{class:"watermark-overlay",style:Ae({backgroundImage:o(s)})},null,4))'
+$watermarkStyleTo = 'return(i,l)=>(r(),_("div",{class:"watermark-overlay",style:Ae({backgroundImage:o(s),display:!t.uid||String(t.uid)==="0"?"none":void 0})},null,4))'
+$watermarkStyleCount = ([regex]::Matches($text, [regex]::Escape($watermarkStyleFrom))).Count
+if ($watermarkStyleCount -ne 1) { throw "expected one watermark overlay style, got $watermarkStyleCount" }
+$text = $text.Replace($watermarkStyleFrom, $watermarkStyleTo)
+
+$midiCardFrom = '!o(w)&&o(Ss)?'
+$midiCardTo = 'o(Ss)?'
+$midiCardCount = ([regex]::Matches($text, [regex]::Escape($midiCardFrom))).Count
+if ($midiCardCount -ne 1) { throw "expected one offline midi upload card hide, got $midiCardCount" }
+$text = $text.Replace($midiCardFrom, $midiCardTo)
+
+$uploadTabFrom = 'o(w)?Y("",!0):(r(),F(on,{key:0,index:so,class:"h-fit"},{default:V(()=>[n("div",Y3,v(o(t)("studio_user_upload_tab")),1)]),_:1}))'
+$uploadTabTo = '(r(),F(on,{key:0,index:so,class:"h-fit"},{default:V(()=>[n("div",Y3,v(o(t)("studio_user_upload_tab")),1)]),_:1}))'
+$uploadTabCount = ([regex]::Matches($text, [regex]::Escape($uploadTabFrom))).Count
+if ($uploadTabCount -ne 1) { throw "expected one offline user-upload tab hide, got $uploadTabCount" }
+$text = $text.Replace($uploadTabFrom, $uploadTabTo)
+
+$menuBarFrom = '!o(w)||o(D).length>0?(r(),_("section",H3,[k(Va,{mode:"horizontal"'
+$menuBarTo = '!0?(r(),_("section",H3,[k(Va,{mode:"horizontal"'
+$menuBarCount = ([regex]::Matches($text, [regex]::Escape($menuBarFrom))).Count
+if ($menuBarCount -ne 1) { throw "expected one offline music menu bar hide, got $menuBarCount" }
+$text = $text.Replace($menuBarFrom, $menuBarTo)
+
+$ugcListFrom = 'Ce=j(()=>w.value?oe.getSongsByStyle(R.value).filter(q=>f.isDownloaded(q.id)):Q.value?te.value:N.value)'
+$ugcListTo = 'Ce=j(()=>Q.value?te.value:w.value?oe.getSongsByStyle(R.value).filter(q=>f.isDownloaded(q.id)):N.value)'
+$ugcListCount = ([regex]::Matches($text, [regex]::Escape($ugcListFrom))).Count
+if ($ugcListCount -ne 1) { throw "expected one offline ugc tab song-list skip, got $ugcListCount" }
+$text = $text.Replace($ugcListFrom, $ugcListTo)
+
+$uploadTabFetchFrom = 'P=async()=>{J.value=so,l.value=!0;const q=T();$e(),await xe(),!(q!==c||!Q.value)&&(l.value=!1,await qe(),X(eo(ct.value)))}'
+$uploadTabFetchTo = 'P=async()=>{J.value=so,l.value=!0;const q=T();$e();if(w.value){l.value=!1;return}await xe(),!(q!==c||!Q.value)&&(l.value=!1,await qe(),X(eo(ct.value)))}'
+$uploadTabFetchCount = ([regex]::Matches($text, [regex]::Escape($uploadTabFetchFrom))).Count
+if ($uploadTabFetchCount -ne 1) { throw "expected one user-upload tab remote fetch, got $uploadTabFetchCount" }
+$text = $text.Replace($uploadTabFetchFrom, $uploadTabFetchTo)
 
 $offlinePlaylistSkip = 'He(async()=>{if(w.value){a.value=!1;return}await Ua(),await W().finally(()=>{a.value=!1}),Po()});'
 $offlinePlaylistFetch = 'He(async()=>{if(w.value){await W().finally(()=>{a.value=!1}),Po();return}await Ua(),await W().finally(()=>{a.value=!1}),Po()});'
@@ -242,8 +320,21 @@ if (-not $verifyText.Contains($midiUidWatchTo)) { throw "patched archive still s
 if ($verifyText.Contains($midiUidWatchFrom)) { throw "patched archive still has the original midi uid watcher" }
 if (-not $verifyText.Contains($midiListTo)) { throw "patched archive missing midi listJobs hideToast" }
 if ($verifyText.Contains($midiListFrom)) { throw "patched archive still toasts midi listJobs errors" }
+if (-not $verifyText.Contains($midiJobsTo) -or $verifyText.Contains($midiJobsFrom)) { throw "patched archive still polls midi listJobs while offline" }
+if (-not $verifyText.Contains($userSongsTo) -or $verifyText.Contains($userSongsFrom)) { throw "patched archive still fetches searchUserSongs while offline" }
 if (-not $verifyText.Contains($videoReplyTo)) { throw "patched archive missing exclusive video reply mapping" }
 if (-not $verifyText.Contains($offlineUser)) { throw "patched archive missing offline uid synchronization" }
+if (-not $verifyText.Contains($offlineUidFallbackTo)) { throw "patched archive still falls back to uid 10000" }
+if ($verifyText.Contains($offlineUidFallbackFrom)) { throw "patched archive still has the original uid 10000 fallback" }
+if (-not $verifyText.Contains($uidStoreTo) -or $verifyText.Contains($uidStoreFrom)) { throw "patched archive still stores uid 0 for watermark" }
+if (-not $verifyText.Contains($nativeUidTo) -or $verifyText.Contains($nativeUidFrom)) { throw "patched archive still passes empty uid to native login" }
+if (-not $verifyText.Contains($watermarkHideTo) -or $verifyText.Contains($watermarkHideFrom)) { throw "patched archive still draws watermark for uid 0" }
+if (-not $verifyText.Contains($watermarkMountTo) -or $verifyText.Contains($watermarkMountFrom)) { throw "patched archive still mounts watermark overlay for uid 0" }
+if (-not $verifyText.Contains($watermarkStyleTo) -or $verifyText.Contains($watermarkStyleFrom)) { throw "patched archive still shows watermark overlay for uid 0" }
+if (-not $verifyText.Contains($midiCardTo) -or $verifyText.Contains($midiCardFrom)) { throw "patched archive still hides the offline midi upload card" }
+if (-not $verifyText.Contains($uploadTabTo) -or $verifyText.Contains($uploadTabFrom)) { throw "patched archive still hides the user-upload tab" }
+if (-not $verifyText.Contains($menuBarTo) -or $verifyText.Contains($menuBarFrom)) { throw "patched archive still hides the offline music menu bar" }
+if (-not $verifyText.Contains($ugcListTo) -or $verifyText.Contains($ugcListFrom)) { throw "patched archive still skips offline ugc song list" }
 if (-not $verifyText.Contains($orderedPollingLoop)) { throw "patched archive missing mailbox polling order fix" }
 if (-not $verifyText.Contains($pollingStateTo)) { throw "patched archive missing polling status comparison" }
 if (-not $verifyText.Contains($processingIconTo)) { throw "patched archive missing processing envelope icon condition" }
@@ -254,6 +345,102 @@ if (-not $verifyText.Contains($addPlaylistCallTo)) { throw "patched archive miss
 if (-not $verifyText.Contains($collectionAddTo)) { throw "patched archive missing Collection add-playlist payload fix" }
 if (-not $verifyText.Contains($offlinePlaylistFetch)) { throw "patched archive still skips offline playlist fetch" }
 if ($verifyText.Contains($offlinePlaylistSkip)) { throw "patched archive still has the original offline playlist fetch skip" }
+if (-not $verifyText.Contains($uploadTabFetchTo) -or $verifyText.Contains($uploadTabFetchFrom)) { throw "patched archive still fetches remote songs on the user-upload tab while offline" }
+
+$webplayerLive = Join-Path $GameRoot "$Version\resources\webplayer.dat"
+if (-not (Test-Path -LiteralPath $webplayerLive)) { throw "webplayer.dat not found" }
+$webplayerBackup = Join-Path ([IO.Path]::GetDirectoryName($OriginalFile)) ("webplayer-" + $Version + ".dat")
+$webplayerBuild = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\_build\webplayer-local"))
+$webplayerExtracted = Join-Path $webplayerBuild "extracted"
+$webplayerPatched = Join-Path $webplayerBuild "webplayer.patched.dat"
+$webplayerMarker = '/*OliviaSoulPatch:webplayer-wm-v19*/'
+if (Test-Path -LiteralPath $webplayerBuild) {
+    Remove-Item -LiteralPath $webplayerBuild -Recurse -Force
+}
+if (-not (Test-Path -LiteralPath $webplayerBackup)) {
+    Copy-Item -LiteralPath $webplayerLive -Destination $webplayerBackup -Force
+}
+New-Item -ItemType Directory -Path $webplayerExtracted | Out-Null
+[IO.Compression.ZipFile]::ExtractToDirectory($webplayerBackup, $webplayerExtracted)
+$webplayerMainFiles = @(Get-ChildItem -LiteralPath (Join-Path $webplayerExtracted "assets") -Filter "main-*.js" -File)
+if ($webplayerMainFiles.Count -ne 1) { throw "expected one webplayer main-*.js, got $($webplayerMainFiles.Count)" }
+$webplayerMainPath = $webplayerMainFiles[0].FullName
+$webplayerText = [IO.File]::ReadAllText($webplayerMainPath, $utf8)
+if ($webplayerText.Contains($webplayerMarker) -or $webplayerText.Contains("OliviaSoulPatch:")) { throw "original webplayer backup already contains a patch" }
+$wpUidFrom = 'const n=new URLSearchParams(window.location.search).get("uid")||"unknown"'
+$wpUidTo = 'const n=function(){var q=new URLSearchParams(window.location.search).get("uid");return!q||q==="0"?"":q}()'
+$wpUidCount = ([regex]::Matches($webplayerText, [regex]::Escape($wpUidFrom))).Count
+if ($wpUidCount -ne 1) { throw "expected one webplayer uid query fallback, got $wpUidCount" }
+$webplayerText = $webplayerText.Replace($wpUidFrom, $wpUidTo)
+$wpHideFrom = 'if(!n.uid)return"none";const r=document.createElement("canvas")'
+$wpHideTo = 'if(!n.uid||String(n.uid)==="0")return"none";const r=document.createElement("canvas")'
+$wpHideCount = ([regex]::Matches($webplayerText, [regex]::Escape($wpHideFrom))).Count
+if ($wpHideCount -ne 1) { throw "expected one webplayer watermark empty-uid skip, got $wpHideCount" }
+$webplayerText = $webplayerText.Replace($wpHideFrom, $wpHideTo)
+$wpMountFrom = 'S(n)?(k(),we(l,{key:0,uid:S(n)},null,8,["uid"])):Re("",!0)'
+$wpMountTo = '!S(n)||String(S(n))==="0"?Re("",!0):(k(),we(l,{key:0,uid:S(n)},null,8,["uid"]))'
+$wpMountCount = ([regex]::Matches($webplayerText, [regex]::Escape($wpMountFrom))).Count
+if ($wpMountCount -ne 1) { throw "expected one webplayer watermark overlay mount, got $wpMountCount" }
+$webplayerText = $webplayerText.Replace($wpMountFrom, $wpMountTo)
+$wpStyleFrom = 'return(r,a)=>(k(),I("div",{class:"watermark-overlay",style:he({backgroundImage:S(s)})},null,4))'
+$wpStyleTo = 'return(r,a)=>(k(),I("div",{class:"watermark-overlay",style:he({backgroundImage:S(s),display:!n.uid||String(n.uid)==="0"?"none":void 0})},null,4))'
+$wpStyleCount = ([regex]::Matches($webplayerText, [regex]::Escape($wpStyleFrom))).Count
+if ($wpStyleCount -ne 1) { throw "expected one webplayer watermark overlay style, got $wpStyleCount" }
+$webplayerText = $webplayerText.Replace($wpStyleFrom, $wpStyleTo)
+$webplayerText = $webplayerMarker + $webplayerText
+[IO.File]::WriteAllText($webplayerMainPath, $webplayerText, $utf8)
+
+$webplayerHtmlPath = Join-Path $webplayerExtracted "index.html"
+if (-not (Test-Path -LiteralPath $webplayerHtmlPath)) { throw "webplayer index.html not found" }
+$webplayerHtml = [IO.File]::ReadAllText($webplayerHtmlPath, $utf8)
+$wpHtmlFrom = "  <link rel=`"stylesheet`" href=`"./assets/vendor-element-7c8f0743.css`">`n</head>"
+$wpHtmlTo = "  <link rel=`"stylesheet`" href=`"./assets/vendor-element-7c8f0743.css`">`n<style>`n.watermark-overlay {`ndisplay: none !important;`n}`n</style>`n<script>(function(){var u=new URLSearchParams(location.search).get('uid');if(u&&u!=='0'){var s=document.currentScript&&document.currentScript.previousElementSibling;if(s&&s.tagName==='STYLE')s.remove();}})();</script>`n</head>"
+$wpHtmlCount = ([regex]::Matches($webplayerHtml, [regex]::Escape($wpHtmlFrom))).Count
+if ($wpHtmlCount -ne 1) { throw "expected one webplayer head stylesheet close, got $wpHtmlCount" }
+$webplayerHtml = $webplayerHtml.Replace($wpHtmlFrom, $wpHtmlTo)
+[IO.File]::WriteAllText($webplayerHtmlPath, $webplayerHtml, $utf8)
+
+$webplayerStream = [IO.File]::Open($webplayerPatched, [IO.FileMode]::Create)
+$webplayerArchive = New-Object -TypeName IO.Compression.ZipArchive -ArgumentList @(
+    $webplayerStream,
+    [IO.Compression.ZipArchiveMode]::Create,
+    $false
+)
+try {
+    foreach ($file in Get-ChildItem -LiteralPath $webplayerExtracted -File -Recurse) {
+        $entryName = $file.FullName.Substring($webplayerExtracted.Length + 1).Replace("\", "/")
+        $entry = $webplayerArchive.CreateEntry($entryName, [IO.Compression.CompressionLevel]::Optimal)
+        $input = [IO.File]::OpenRead($file.FullName)
+        $output = $entry.Open()
+        try {
+            $input.CopyTo($output)
+        }
+        finally {
+            $output.Dispose()
+            $input.Dispose()
+        }
+    }
+}
+finally {
+    $webplayerArchive.Dispose()
+    $webplayerStream.Dispose()
+}
+Copy-Item -LiteralPath $webplayerPatched -Destination $webplayerLive -Force
+
+$webplayerVerifyDir = Join-Path $webplayerBuild "verify"
+New-Item -ItemType Directory -Path $webplayerVerifyDir | Out-Null
+[IO.Compression.ZipFile]::ExtractToDirectory($webplayerLive, $webplayerVerifyDir)
+$webplayerVerifyMain = @(Get-ChildItem -LiteralPath (Join-Path $webplayerVerifyDir "assets") -Filter "main-*.js" -File)[0]
+$webplayerVerifyText = [IO.File]::ReadAllText($webplayerVerifyMain.FullName, $utf8)
+$webplayerVerifyHtml = [IO.File]::ReadAllText((Join-Path $webplayerVerifyDir "index.html"), $utf8)
+if (-not $webplayerVerifyText.StartsWith($webplayerMarker)) { throw "patched webplayer missing revision marker" }
+if (-not $webplayerVerifyText.Contains($wpUidTo) -or $webplayerVerifyText.Contains($wpUidFrom)) { throw "patched webplayer still draws uid 0 from the query string" }
+if (-not $webplayerVerifyText.Contains($wpHideTo) -or $webplayerVerifyText.Contains($wpHideFrom)) { throw "patched webplayer still draws watermark for uid 0" }
+if (-not $webplayerVerifyText.Contains($wpMountTo) -or $webplayerVerifyText.Contains($wpMountFrom)) { throw "patched webplayer still mounts watermark overlay for uid 0" }
+if (-not $webplayerVerifyText.Contains($wpStyleTo) -or $webplayerVerifyText.Contains($wpStyleFrom)) { throw "patched webplayer still shows watermark overlay for uid 0" }
+if (-not $webplayerVerifyHtml.Contains(".watermark-overlay {") -or -not $webplayerVerifyHtml.Contains("display: none !important;")) { throw "patched webplayer missing watermark CSS hide" }
+$verifyNames = @(Get-ChildItem -LiteralPath $webplayerVerifyDir -File -Recurse | ForEach-Object { $_.FullName.Substring($webplayerVerifyDir.Length + 1).Replace("\", "/") })
+if ($verifyNames -notcontains "index.html") { throw "patched webplayer zip wrapped an extra folder" }
 
 $latin1 = [Text.Encoding]::GetEncoding(28591)
 function Find-ByteSequence([byte[]]$Haystack, [byte[]]$Needle) {
@@ -345,8 +532,11 @@ if (Test-Path -LiteralPath $userSettingsPath) {
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $source).Hash
 $studioHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $studioUiPath).Hash
 $pluginHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $containerPluginPath).Hash
+$webplayerHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $webplayerLive).Hash
 Write-Output "patched=$source"
 Write-Output "sha256=$hash"
+Write-Output "webplayer=$webplayerLive"
+Write-Output "webplayerSha256=$webplayerHash"
 Write-Output "studioUi=$studioUiPath"
 Write-Output "studioUiSha256=$studioHash"
 Write-Output "containerPlugin=$containerPluginPath"

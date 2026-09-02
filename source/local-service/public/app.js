@@ -134,9 +134,9 @@ function renderStatus(status) {
 }
 
 function renderIdentity(identity) {
-  $("#offlineUid").value = identity.uid;
+  $("#offlineUid").value = !identity.uid || String(identity.uid) === "0" ? "" : identity.uid;
   $("#offlineNickname").value = identity.nickname;
-  $(".avatar").textContent = Array.from(identity.nickname)[0];
+  $(".avatar").textContent = Array.from(identity.nickname || "")[0] || "";
 }
 
 function renderMemoryStatus(status) {

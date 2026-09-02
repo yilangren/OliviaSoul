@@ -15,7 +15,6 @@ param(
     [string]$OutFile = "",
     [string]$DraftFile = "",
     [string]$PrecheckFile = "",
-    [string]$HistoryFile = "",
     [string]$PreviousStateTag = "",
     [string]$PreviousReplyOverrideFile = "",
     [switch]$NoThink,
@@ -28,7 +27,6 @@ param(
 $ErrorActionPreference = "Stop"
 if ([string]::IsNullOrWhiteSpace($Root)) { $Root = (Get-Location).Path }
 . (Join-Path $PSScriptRoot "memory-lib.ps1")
-. (Join-Path $PSScriptRoot "history-retrieval.ps1")
 Initialize-Ds -Root $Root
 if (-not [string]::IsNullOrWhiteSpace($Model)) { Set-DsModel -Model $Model }
 if ($NoThink) { Set-DsThinking -On $false }
@@ -96,15 +94,6 @@ if (-not [string]::IsNullOrWhiteSpace($ArchivePath)) { $arch = $ArchivePath }
 $openingPath = Join-Path $HarnessDir ((-join @([char]0x5F00, [char]0x4FE1)) + ".md")
 if (-not (Test-Path -LiteralPath $openingPath)) { $openingPath = Join-Path $Root ("harness\" + (-join @([char]0x5F00, [char]0x4FE1)) + ".md") }
 $ctx = Build-Memory -Root $Root -Person $Person -N $N -ArchivePath $arch -OpeningPath $openingPath
-$factCtx = Build-FactMemory -Root $Root -Person $Person -N $N -ArchivePath $arch -OpeningPath $openingPath
-if ([string]::IsNullOrWhiteSpace($HistoryFile)) {
-    $historySnapshot = New-HistorySnapshotFromArchive -ArchivePath $arch -Person $Person -BeforeN $N
-}
-else {
-    if (-not [IO.Path]::IsPathRooted($HistoryFile)) { $HistoryFile = Join-Path $Root $HistoryFile }
-    $historySnapshot = Read-HistorySnapshot -Path $HistoryFile
-    if ([string]$historySnapshot.person -ne $Person) { throw "history snapshot person mismatch" }
-}
 if (-not [string]::IsNullOrWhiteSpace($PreviousReplyOverrideFile)) {
     if ($N -lt 2) { throw "previous reply override requires N >= 2" }
     if (-not [IO.Path]::IsPathRooted($PreviousReplyOverrideFile)) { $PreviousReplyOverrideFile = Join-Path $Root $PreviousReplyOverrideFile }
@@ -118,12 +107,6 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousReplyOverrideFile)) {
     $replyHeadingEnd = $ctx.IndexOf("`n", $replyHeadingStart)
     if ($replyHeadingEnd -lt 0 -or $replyHeadingEnd -ge $targetHeadingStart) { throw "cannot locate previous reply heading end" }
     $ctx = $ctx.Substring(0, $replyHeadingEnd + 1) + "`n" + $overrideReply + "`n`n" + $ctx.Substring($targetHeadingStart)
-    $replyHeadingStart = $factCtx.LastIndexOf($linliHeading)
-    $targetHeadingStart = $factCtx.IndexOf($targetHeading, $replyHeadingStart)
-    if ($replyHeadingStart -lt 0 -or $targetHeadingStart -lt 0) { throw "cannot locate previous reply in fact context" }
-    $replyHeadingEnd = $factCtx.IndexOf("`n", $replyHeadingStart)
-    if ($replyHeadingEnd -lt 0 -or $replyHeadingEnd -ge $targetHeadingStart) { throw "cannot locate previous reply heading end in fact context" }
-    $factCtx = $factCtx.Substring(0, $replyHeadingEnd + 1) + "`n" + $overrideReply + "`n`n" + $factCtx.Substring($targetHeadingStart)
 }
 
 $relationshipLabel = -join @([char]0x4F60, [char]0x4EEC, [char]0x7684, [char]0x5173, [char]0x7CFB)
@@ -157,7 +140,7 @@ if (-not [string]::IsNullOrWhiteSpace($PreviousStateTag)) {
                     ForEach-Object { $_.Trim() } |
                     Where-Object { $_.Length -gt 0 }
             )
-            $statePrefixes = @("关系　", "关系依据　", "已承认情感　", "已承认称呼　", "既有亲密　", "既有边界　", "亲密上限　")
+            $statePrefixes = @("关系　", "关系依据　", "已承认情感　", "既有亲密　", "既有边界　", "亲密上限　")
             $stateLines = @(
                 $previousSafeLines |
                     Where-Object {
@@ -197,12 +180,11 @@ Lap "T1safe"
 $expectedSafeLines = 8
 if ($p1.System -match "九行") { $expectedSafeLines = 9 }
 if ($p1.System -match "十三行") { $expectedSafeLines = 13 }
-if ($p1.System -match "十四行") { $expectedSafeLines = 14 }
 $safeLines = @(($safe -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
 $fullWidthSpace = [string][char]0x3000
 $conclusionWord = -join @([char]0x7ED3, [char]0x8BBA)
 $allowedRelationships = @()
-if ($expectedSafeLines -ge 13) {
+if ($expectedSafeLines -eq 13) {
     $relationshipWord = -join @([char]0x5173, [char]0x7CFB)
     $relationshipDefinition = @(
         ($p1.System -split "`r?`n") |
@@ -212,19 +194,16 @@ if ($expectedSafeLines -ge 13) {
         $relationshipDefinition.Substring($relationshipDefinition.IndexOf($fullWidthSpace) + 1) -split ([string][char]0xFF0F)
     )
 }
-function Test-SafeLedgerFormat([string]$Text, [int]$ExpectedLines, $Relationships) {
-    $lines = @(($Text -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
-    if ($lines.Count -ne $ExpectedLines) { return $false }
-    if (@($lines | Where-Object { $_.IndexOf($fullWidthSpace) -lt 1 }).Count -gt 0) { return $false }
-    if (-not $lines[$ExpectedLines - 1].StartsWith($conclusionWord)) { return $false }
-    if ($Text -match "(?m)^\s*(#|---)") { return $false }
-    if ($ExpectedLines -ge 13) {
-        $relationshipValue = $lines[4].Substring($lines[4].IndexOf($fullWidthSpace) + 1).Trim()
-        if (-not ($Relationships -contains $relationshipValue)) { return $false }
-    }
-    return $true
+$invalidSafe = $safeLines.Count -ne $expectedSafeLines
+if (-not $invalidSafe) {
+    $invalidSafe = @($safeLines | Where-Object { $_.IndexOf($fullWidthSpace) -lt 1 }).Count -gt 0
 }
-$invalidSafe = -not (Test-SafeLedgerFormat -Text $safe -ExpectedLines $expectedSafeLines -Relationships $allowedRelationships)
+if (-not $invalidSafe) { $invalidSafe = -not $safeLines[$expectedSafeLines - 1].StartsWith($conclusionWord) }
+if ($safe -match "(?m)^\s*(#|---)") { $invalidSafe = $true }
+if (-not $invalidSafe -and $expectedSafeLines -eq 13) {
+    $relationshipValue = $safeLines[4].Substring($safeLines[4].IndexOf($fullWidthSpace) + 1).Trim()
+    $invalidSafe = -not ($allowedRelationships -contains $relationshipValue)
+}
 if ($invalidSafe -and [string]::IsNullOrWhiteSpace($ReuseSafeTag)) {
     Write-Output ("STEP1 repair-format " + $Person + " " + $nn)
     $repairSystem = $p1.System + "`n`n上一版输出格式不合格。重新执行原任务，字段不可省略；只输出规定行数与规定字段，不要解释。"
@@ -232,7 +211,16 @@ if ($invalidSafe -and [string]::IsNullOrWhiteSpace($ReuseSafeTag)) {
     $safe = Invoke-Ds -System $repairSystem -User $repairUser
     Save-Step "1safe" $safe
     $safeLines = @(($safe -split "`r?`n") | ForEach-Object { $_.Trim() } | Where-Object { $_.Length -gt 0 })
-    $invalidSafe = -not (Test-SafeLedgerFormat -Text $safe -ExpectedLines $expectedSafeLines -Relationships $allowedRelationships)
+    $invalidSafe = $safeLines.Count -ne $expectedSafeLines
+    if (-not $invalidSafe) {
+        $invalidSafe = @($safeLines | Where-Object { $_.IndexOf($fullWidthSpace) -lt 1 }).Count -gt 0
+    }
+    if (-not $invalidSafe) { $invalidSafe = -not $safeLines[$expectedSafeLines - 1].StartsWith($conclusionWord) }
+    if ($safe -match "(?m)^\s*(#|---)") { $invalidSafe = $true }
+    if (-not $invalidSafe -and $expectedSafeLines -eq 13) {
+        $relationshipValue = $safeLines[4].Substring($safeLines[4].IndexOf($fullWidthSpace) + 1).Trim()
+        $invalidSafe = -not ($allowedRelationships -contains $relationshipValue)
+    }
 }
 if ($invalidSafe) { throw "STEP1 precheck format invalid" }
 
@@ -249,198 +237,9 @@ if ($safe -match $blockWord) {
     return
 }
 
-$historyBudget = New-HistoryBudget
-$historyResults = @()
-$historyEvidence = @()
-$historyAudit = @()
-$historyTermination = "planner-finished"
-$historyPrompt = Get-HarnessPrompt ("02-" + (-join @([char]0x5386, [char]0x53F2, [char]0x68C0, [char]0x7D22)) + ".md")
-$historyPlannerThinking = $script:DsThinking
-Set-DsThinking -On $false
-$historicalProofRequired = $safe -match "(?m)^事实伪造　有　.*(往来|旧信|上封|以前|之前|曾经|叫过|写过|说过|记得)"
-for ($historyRound = 1; $historyRound -le 2; $historyRound++) {
-    $remainingSeconds = [Math]::Max(0, 45 - [int](([DateTime]::UtcNow - $historyBudget.startedAt).TotalSeconds))
-    $budgetText = "轮次 $historyRound/2；查询 $($historyBudget.queryCount)/4；完整往来 $($historyBudget.fullReads)/3；字符 $($historyBudget.characters)/12000；时间剩余 ${remainingSeconds}s"
-    $resultText = "无（尚未检索）"
-    if ($historyResults.Count -gt 0) { $resultText = $historyResults | ConvertTo-Json -Depth 8 }
-    $historyMap = @{
-        safe = $safe
-        navigation = $ctx
-        facts = $factCtx
-        historyResults = $resultText
-        budget = $budgetText
-    }
-    Write-Output ("STEP2 history-plan round=" + $historyRound + " " + $Person + " " + $nn)
-    $intent = Invoke-DsJson `
-        -System (Expand-Harness $historyPrompt.System $historyMap) `
-        -User (Expand-Harness $historyPrompt.User $historyMap)
-    $historyAudit += [pscustomobject]([ordered]@{
-        round = $historyRound
-        intent = $intent
-        finishReason = $script:DsLastFinishReason
-        usage = $script:DsLastUsage
-    })
-    Save-Step ("2history_{0}_intent" -f $historyRound) ($intent | ConvertTo-Json -Depth 8)
-    $hasCandidates = @($historyResults | Where-Object { $_.kind -eq "candidate" }).Count -gt 0
-    if ([string]$intent.action -eq "finish" -and $historyEvidence.Count -eq 0 -and ($hasCandidates -or $historicalProofRequired)) {
-        $repairContext = if ($hasCandidates) { $resultText } else { "无候选；请先 search，或按暂定账本指出的往来顺序直接 read。" }
-        $finishRepairMap = @{
-            safe = $safe
-            navigation = $ctx
-            facts = $factCtx
-            historyResults = "暂定账本正在判断一项历史真伪，当前来信自己的引文不是证据，你尚未取得完整历史原文，不能 finish。必须 read 或 neighbors；没有候选时先 search，或按账本指出的往来顺序直接 read。`n" + $repairContext
-            budget = $budgetText
-        }
-        $intent = Invoke-DsJson `
-            -System (Expand-Harness $historyPrompt.System $finishRepairMap) `
-            -User (Expand-Harness $historyPrompt.User $finishRepairMap)
-        $historyAudit += [pscustomobject]([ordered]@{
-            round = $historyRound
-            contractRepair = "historical claim requires original evidence"
-            repairedIntent = $intent
-            finishReason = $script:DsLastFinishReason
-            usage = $script:DsLastUsage
-        })
-        Save-Step ("2history_{0}_intent_repaired" -f $historyRound) ($intent | ConvertTo-Json -Depth 8)
-    }
-    if ([string]$intent.action -eq "finish") {
-        if ($historyEvidence.Count -eq 0 -and $historicalProofRequired) {
-            throw "history evidence required but planner did not retrieve original text"
-        }
-        $historyTermination = "planner-finished: " + [string]$intent.reason
-        break
-    }
-    if ([string]$intent.action -in @("search", "read", "neighbors") -and @($intent.lookups).Count -gt 0) {
-        $historyAudit += [pscustomobject]([ordered]@{
-            round = $historyRound
-            formatRepair = "normalized top-level action to lookup"
-        })
-        $intent.action = "lookup"
-    }
-    if ([string]$intent.action -ne "lookup") {
-        $historyTermination = "invalid-action"
-        break
-    }
-    try {
-        $retrieved = Invoke-HistoryRetrieval -Snapshot $historySnapshot -Intent $intent -Budget $historyBudget
-    }
-    catch {
-        $rejection = $_.Exception.Message
-        $historyAudit += [pscustomobject]([ordered]@{
-            round = $historyRound
-            rejection = $rejection
-        })
-        if ($rejection -match "time budget exceeded") {
-            $historyTermination = "retrieval-frozen: " + $rejection
-            break
-        }
-        $repairMap = @{
-            safe = $safe
-            navigation = $ctx
-            facts = $factCtx
-            historyResults = "档案室拒绝上一请求：$rejection。只修复一次；若不能合法检索请 finish。"
-            budget = $budgetText
-        }
-        try {
-            $intent = Invoke-DsJson `
-                -System (Expand-Harness $historyPrompt.System $repairMap) `
-                -User (Expand-Harness $historyPrompt.User $repairMap)
-            if ([string]$intent.action -eq "finish") {
-                $historyTermination = "planner-finished-after-repair: " + [string]$intent.reason
-                break
-            }
-            if ([string]$intent.action -ne "lookup") { throw "history repaired action invalid" }
-            $retrieved = Invoke-HistoryRetrieval -Snapshot $historySnapshot -Intent $intent -Budget $historyBudget
-        }
-        catch {
-            $historyTermination = "retrieval-frozen: " + $_.Exception.Message
-            break
-        }
-    }
-    $historyResults += @($retrieved.candidates)
-    $historyResults += @($retrieved.evidence)
-    $knownEvidence = @{}
-    foreach ($item in $historyEvidence) { $knownEvidence[[string]$item.letterId] = $true }
-    foreach ($item in @($retrieved.evidence)) {
-        if (-not $knownEvidence.ContainsKey([string]$item.letterId)) {
-            $historyEvidence += $item
-            $knownEvidence[[string]$item.letterId] = $true
-        }
-    }
-    Save-Step ("2history_{0}_result" -f $historyRound) ($retrieved | ConvertTo-Json -Depth 8)
-    if ($historyRound -eq 2) { $historyTermination = "round-budget-exhausted" }
-}
-Set-DsThinking -On $historyPlannerThinking
-$historyRetrievalElapsedMs = [int](([DateTime]::UtcNow - $historyBudget.startedAt).TotalMilliseconds)
-
-$evidenceText = "无（本轮不需要检索历史原文）"
-$reconcileAudit = $null
-if ($historyEvidence.Count -gt 0) {
-    $reconcileStartedAt = [DateTime]::UtcNow
-    $evidenceText = $historyEvidence | ConvertTo-Json -Depth 8
-    $provisionalSafe = $safe
-    Save-Step "1safe_provisional" $provisionalSafe
-    $reconcilePrompt = Get-HarnessPrompt ("02-" + (-join @([char]0x8D26, [char]0x672C, [char]0x6821, [char]0x6B63)) + ".md")
-    $reconcileMap = @{ safe = $provisionalSafe; facts = $factCtx; evidence = $evidenceText }
-    Write-Output ("STEP2 reconcile " + $Person + " " + $nn)
-    Set-DsThinking -On $false
-    $safe = Invoke-Ds `
-        -System (Expand-Harness $reconcilePrompt.System $reconcileMap) `
-        -User (Expand-Harness $reconcilePrompt.User $reconcileMap)
-    Save-Step "1safe_reconcile_attempt1" $safe
-    $reconcileCalls = 1
-    $reconcileUsage = @($script:DsLastUsage)
-    $reconcileInvalid = -not (Test-SafeLedgerFormat -Text $safe -ExpectedLines 14 -Relationships $allowedRelationships)
-    if ($safe -match "(?m)^(关系依据|已承认称呼|既有亲密|既有边界)　.*(五段式|摘要|回忆)") { $reconcileInvalid = $true }
-    if ($reconcileInvalid) {
-        $reconcileSystem = $reconcilePrompt.System + "`n`n上一版格式或证据来源不合格。只输出规定十四行，字段不可省略；最终账本不得把五段式、摘要或回忆写成事实依据，改引近期原文或检索原文的往来顺序/letterId。"
-        $safe = Invoke-Ds -System (Expand-Harness $reconcileSystem $reconcileMap) -User (Expand-Harness $reconcilePrompt.User $reconcileMap)
-        Save-Step "1safe_reconcile_attempt2" $safe
-        $reconcileCalls += 1
-        $reconcileUsage += $script:DsLastUsage
-    }
-    $reconcileInvalid = -not (Test-SafeLedgerFormat -Text $safe -ExpectedLines 14 -Relationships $allowedRelationships)
-    if ($safe -match "(?m)^(关系依据|已承认称呼|既有亲密|既有边界)　.*(五段式|摘要|回忆)") { $reconcileInvalid = $true }
-    if ($reconcileInvalid) {
-        throw "STEP2 reconciled ledger format invalid"
-    }
-    Set-DsThinking -On $historyPlannerThinking
-    $reconcileAudit = [ordered]@{
-        calls = $reconcileCalls
-        finishReason = $script:DsLastFinishReason
-        usage = $reconcileUsage
-        elapsedMs = [int](([DateTime]::UtcNow - $reconcileStartedAt).TotalMilliseconds)
-    }
-    Save-Step "1safe" $safe
-}
-
-$historyAuditPackage = [ordered]@{
-    schema = "olivia-history.audit"
-    version = 1
-    snapshot = [ordered]@{
-        snapshotId = [string]$historySnapshot.snapshotId
-        person = [string]$historySnapshot.person
-        maxOrder = [int]$historySnapshot.maxOrder
-    }
-    planner = $historyAudit
-    reconcile = $reconcileAudit
-    retrievalResults = $historyResults
-    evidence = $historyEvidence
-    budget = [ordered]@{
-        queries = [int]$historyBudget.queryCount
-        fullReads = [int]$historyBudget.fullReads
-        characters = [int]$historyBudget.characters
-        elapsedMs = $historyRetrievalElapsedMs
-    }
-    totalElapsedMs = [int](([DateTime]::UtcNow - $historyBudget.startedAt).TotalMilliseconds)
-    terminationReason = $historyTermination
-}
-Save-Step "2history_audit" ($historyAuditPackage | ConvertTo-Json -Depth 10)
-Lap "T2history"
-
 if ([string]::IsNullOrWhiteSpace($DraftFile)) {
     $p3 = Get-HarnessPrompt ("03-" + (-join @([char]0x4E2D, [char]0x6BB5, [char]0x751F, [char]0x6210)) + ".md")
-    $map3 = @{ fields = $fields; safe = $safe; rules = $rules; persona = $persona; ctx = $factCtx; evidence = $evidenceText }
+    $map3 = @{ fields = $fields; safe = $safe; rules = $rules; persona = $persona; ctx = $ctx }
     $sysDraft = Expand-Harness $p3.System $map3
     $userDraft = Expand-Harness $p3.User $map3
     Write-Output ("STEP3 draft " + $Person + " " + $nn)
@@ -456,7 +255,7 @@ Save-Step "3draft" $draft
 Lap "T3draft"
 
 $p4 = Get-HarnessPrompt ("04-" + (-join @([char]0x5C3E, [char]0x7AEF, [char]0x68C0, [char]0x67E5)) + ".md")
-$map4 = @{ fields = $fields; safe = $safe; persona = $persona; draft = $draft; ctx = $factCtx; evidence = $evidenceText }
+$map4 = @{ fields = $fields; safe = $safe; persona = $persona; draft = $draft; ctx = $ctx }
 $sysCheck = Expand-Harness $p4.System $map4
 $userCheck = Expand-Harness $p4.User $map4
 Write-Output ("STEP4 check " + $Person + " " + $nn)
@@ -479,25 +278,11 @@ if ($bad.Count -eq 0) {
 else {
     $check = [string]::Join("`n", $bad)
     $p5 = Get-HarnessPrompt ("05-" + (-join @([char]0x53CD, [char]0x9988, [char]0x91CD, [char]0x5199)) + ".md")
-    $map5 = @{ fields = $fields; safe = $safe; check = $check; rules = $rules; persona = $persona; draft = $draft; ctx = $factCtx; evidence = $evidenceText }
+    $map5 = @{ fields = $fields; safe = $safe; check = $check; rules = $rules; persona = $persona; draft = $draft; ctx = $ctx }
     $sysFix = Expand-Harness $p5.System $map5
     $userFix = Expand-Harness $p5.User $map5
     Write-Output ("STEP5 rewrite " + $Person + " " + $nn)
     $final = Invoke-Ds -System $sysFix -User $userFix
-    Save-Step "5rewrite" $final
-    $recheckMap = @{ fields = $fields; safe = $safe; persona = $persona; draft = $final; ctx = $factCtx; evidence = $evidenceText }
-    Write-Output ("STEP5 recheck " + $Person + " " + $nn)
-    $recheck = Invoke-Ds `
-        -System (Expand-Harness $p4.System $recheckMap) `
-        -User (Expand-Harness $p4.User $recheckMap)
-    Save-Step "5recheck" $recheck
-    $recheckBad = @(
-        foreach ($line in ($recheck -split "`n")) {
-            $parts = @($line.Trim() -split [regex]::Escape($fullWidthSpace))
-            if ($parts.Count -ge 2 -and $parts[1].Trim() -eq $badWord) { $line }
-        }
-    )
-    if ($recheckBad.Count -gt 0) { throw "STEP5 rewritten reply still violates hard checks" }
     Save-Step "5final" $final
 }
 

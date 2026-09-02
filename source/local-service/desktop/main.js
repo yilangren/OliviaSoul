@@ -363,6 +363,9 @@ async function packagedWorkspace() {
   await cp(join(template, ".cursor", "skills"), join(root, ".cursor", "skills"), { recursive: true, force: true });
   await rm(join(root, ".cursor", "rules"), { recursive: true, force: true });
   await cp(join(template, "harness"), join(root, "harness"), { recursive: true, force: true });
+  await rm(join(root, "harness", "02-历史检索.md"), { force: true });
+  await rm(join(root, "harness", "02-账本校正.md"), { force: true });
+  await rm(join(root, ".cursor", "skills", "fit-letters", "scripts", "history-retrieval.ps1"), { force: true });
   await cp(join(template, "tools"), join(root, "tools"), { recursive: true, force: true });
   await cp(join(template, "林离人设.md"), join(root, "林离人设.md"), { force: true });
   await mkdir(join(root, "信件往来"), { recursive: true });

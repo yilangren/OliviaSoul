@@ -25,7 +25,7 @@ v18 的精简接入契约、文件清单和验收项见 `V18_ENGINEERING.md`；�
 - 模型调用：`.cursor/skills/fit-letters/scripts/ds-call.ps1`
 - Prompt：`harness/*.md`
 
-当前正式服务默认使用根目录 `harness/`，版本由 `harness/VERSION` 标记，当前为 v18。正式目录保留栏目、预检、历史检索、账本校正、生成、检查、重写、写法与开信文件；`harness-v16-nofeel/`、`harness-v17/` 保留为历史实验配置，不由实时服务直接读取。
+当前正式服务默认使用根目录 `harness/`，版本由 `harness/VERSION` 标记，当前为 v18。正式目录保留栏目、预检、生成、检查、重写、写法与开信文件。按需翻信是已撤回的实验步骤，不进入正式生成。
 
 ## 2. 为什么叫四步 Harness
 

@@ -209,11 +209,11 @@ foreach ($name in @("controller.js", "node-host.js", "startup-task.ps1")) {
 }
 
 $scriptTarget = Join-Path $stage "resources\workspace-template\.cursor\skills\fit-letters\scripts"
-foreach ($name in @("deepseek-reply.ps1", "harness-live.ps1", "harness-4step.ps1", "history-retrieval.ps1", "refresh-live-memory.ps1", "memory-lib.ps1", "ds-call.ps1", "score-temp.ps1", "sqlite-memory-load.cjs")) {
+foreach ($name in @("deepseek-reply.ps1", "harness-live.ps1", "harness-4step.ps1", "refresh-live-memory.ps1", "memory-lib.ps1", "ds-call.ps1", "score-temp.ps1", "sqlite-memory-load.cjs")) {
     Copy-PublicFile (Join-Path $repository ".cursor\skills\fit-letters\scripts\$name") (Join-Path $scriptTarget $name)
 }
 Copy-PublicFile (Join-Path $repository "林离人设.md") (Join-Path $stage "resources\workspace-template\林离人设.md")
-foreach ($name in @("VERSION", "00-栏目.md", "01-预检.md", "01-初始化账本.md", "02-历史检索.md", "02-账本校正.md", "03-中段生成.md", "04-尾端检查.md", "05-反馈重写.md", "开信.md", "写法.md")) {
+foreach ($name in @("VERSION", "00-栏目.md", "01-预检.md", "01-初始化账本.md", "03-中段生成.md", "04-尾端检查.md", "05-反馈重写.md", "开信.md", "写法.md")) {
     Copy-PublicFile (Join-Path $repository "harness\$name") (Join-Path $stage "resources\workspace-template\harness\$name")
 }
 foreach ($name in @("patch-feapp-local.ps1", "restore-feapp-original.ps1", "get-feapp-status.ps1")) {

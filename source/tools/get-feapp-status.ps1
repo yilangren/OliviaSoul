@@ -54,7 +54,7 @@ foreach ($endpoint in $endpoints) {
 }
 $uniquePorts = @($ports | Select-Object -Unique)
 $patchMarkers = @(
-    '/*OliviaSoulPatch:mail-music-v11*/'
+    '/*OliviaSoulPatch:mail-music-v19*/'
 )
 $mounted = $complete -and $uniquePorts.Count -eq 1 -and @($patchMarkers | Where-Object { $text.StartsWith($_) }).Count -eq 1
 $port = $null

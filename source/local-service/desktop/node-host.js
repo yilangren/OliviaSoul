@@ -36,7 +36,10 @@ async function prepareWorkspace(template, root) {
     rm(join(root, "harness", "00-strict-precheck.md"), { force: true }),
     rm(join(root, "harness", "00-脚本算术.md"), { force: true }),
     rm(join(root, "harness", "02-读信感.md"), { force: true }),
+    rm(join(root, "harness", "02-历史检索.md"), { force: true }),
+    rm(join(root, "harness", "02-账本校正.md"), { force: true }),
     rm(join(root, "harness", "06-实时回信.md"), { force: true }),
+    rm(join(root, ".cursor", "skills", "fit-letters", "scripts", "history-retrieval.ps1"), { force: true }),
   ]);
   await Promise.all([
     mkdir(join(root, "信件往来"), { recursive: true }),

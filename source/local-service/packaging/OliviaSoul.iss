@@ -29,7 +29,10 @@ Type: filesandordirs; Name: "{app}\resources\workspace-template\.cursor\rules"
 Type: files; Name: "{app}\resources\workspace-template\harness\00-strict-precheck.md"
 Type: files; Name: "{app}\resources\workspace-template\harness\00-脚本算术.md"
 Type: files; Name: "{app}\resources\workspace-template\harness\02-读信感.md"
+Type: files; Name: "{app}\resources\workspace-template\harness\02-历史检索.md"
+Type: files; Name: "{app}\resources\workspace-template\harness\02-账本校正.md"
 Type: files; Name: "{app}\resources\workspace-template\harness\06-实时回信.md"
+Type: files; Name: "{app}\resources\workspace-template\.cursor\skills\fit-letters\scripts\history-retrieval.ps1"
 
 [Dirs]
 Name: "{commonappdata}\OliviaSoul"; Permissions: users-modify

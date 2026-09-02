@@ -14,6 +14,11 @@ Get-CimInstance Win32_Process |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Start-Sleep -Milliseconds 250
 Copy-Item -LiteralPath $OriginalFile -Destination $destination -Force
+$webplayerDestination = Join-Path $GameRoot "$Version\resources\webplayer.dat"
+$webplayerBackup = Join-Path ([IO.Path]::GetDirectoryName($OriginalFile)) ("webplayer-" + $Version + ".dat")
+if (Test-Path -LiteralPath $webplayerBackup) {
+    Copy-Item -LiteralPath $webplayerBackup -Destination $webplayerDestination -Force
+}
 $nutBasePath = Join-Path $GameRoot "$Version\NutBase.dll"
 $nutBackup = Join-Path ([IO.Path]::GetDirectoryName($OriginalFile)) ("NutBase-" + $Version + ".dll")
 if (Test-Path -LiteralPath $nutBackup) {
@@ -37,6 +42,10 @@ if ((Test-Path -LiteralPath $settingsBackup) -and (Test-Path -LiteralPath $userS
 $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $destination).Hash
 Write-Output "restored=$destination"
 Write-Output "sha256=$hash"
+if (Test-Path -LiteralPath $webplayerDestination) {
+    Write-Output "webplayer=$webplayerDestination"
+    Write-Output "webplayerSha256=$((Get-FileHash -Algorithm SHA256 -LiteralPath $webplayerDestination).Hash)"
+}
 if (Test-Path -LiteralPath $studioUiPath) {
     Write-Output "studioUi=$studioUiPath"
     Write-Output "studioUiSha256=$((Get-FileHash -Algorithm SHA256 -LiteralPath $studioUiPath).Hash)"

@@ -77,10 +77,15 @@ function assertPerson(person) {
   return person;
 }
 
+function normalizeOfflineUid(value) {
+  const uid = String(value ?? "").trim();
+  if (uid && !/^\d{1,18}$/u.test(uid)) throw httpError(400, "UID 必须是 1–18 位数字，0 或不填表示无水印");
+  return !uid || Number(uid) === 0 ? "0" : uid;
+}
+
 function normalizeOfflineIdentity(value) {
-  const uid = String(value.uid ?? "").trim();
+  const uid = normalizeOfflineUid(value.uid);
   const nickname = String(value.nickname ?? "").trim();
-  if (!/^\d{1,18}$/u.test(uid)) throw httpError(400, "UID 必须是 1–18 位数字");
   if (!nickname || nickname.length > 32) throw httpError(400, "用户名长度必须是 1–32 个字符");
   if (/[\x00-\x1F\x7F]/u.test(nickname) || CONTROL_CHARS.test(nickname))
     throw httpError(400, "用户名包含不可用字符");
@@ -433,35 +438,28 @@ export function validateHarnessReply(stdout, reply) {
   return normalized;
 }
 
-async function deepSeekGenerator({ person, content, id, root, tempDir, historySnapshot }) {
+async function deepSeekGenerator({ person, content, id, root, tempDir }) {
   const harnessVersion = (await readFile(join(root, "harness", "VERSION"), "utf8")).trim();
   if (harnessVersion !== "v18") throw new Error(`Harness 版本不正确：${harnessVersion || "缺失"}`);
   const letterFile = join(tempDir, `${id}.letter.txt`);
   const replyFile = join(tempDir, `${id}.reply.txt`);
-  const historyFile = join(tempDir, `${id}.history.json`);
   await writeFile(letterFile, content, "utf8");
-  await writeFile(historyFile, JSON.stringify(historySnapshot), "utf8");
-  try {
-    let progressBuffer = "";
-    const processResult = await runProcess("powershell.exe", [
-      "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-      join(root, ".cursor", "skills", "fit-letters", "scripts", "harness-live.ps1"),
-      "-Person", person, "-Letter", letterFile, "-OutFile", replyFile,
-      "-HistoryFile", historyFile,
-      "-RulesFile", join(root, "harness", "写法.md"), "-Root", root,
-    ], root, GENERATION_TIMEOUT_MS, undefined, chunk => {
-      progressBuffer += chunk;
-      const lines = progressBuffer.split(/\r?\n/u);
-      progressBuffer = lines.pop() ?? "";
-      for (const line of lines) {
-        const stage = /^(STEP\d+\s+[\w-]+)/u.exec(line.trim())?.[1];
-        if (stage) console.log(`[harness-stage] id=${id} stage=${stage}`);
-      }
-    });
-    return validateHarnessReply(processResult.stdout, await readFile(replyFile, "utf8"));
-  } finally {
-    await rm(historyFile, { force: true });
-  }
+  let progressBuffer = "";
+  const processResult = await runProcess("powershell.exe", [
+    "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+    join(root, ".cursor", "skills", "fit-letters", "scripts", "harness-live.ps1"),
+    "-Person", person, "-Letter", letterFile, "-OutFile", replyFile,
+    "-RulesFile", join(root, "harness", "写法.md"), "-Root", root,
+  ], root, GENERATION_TIMEOUT_MS, undefined, chunk => {
+    progressBuffer += chunk;
+    const lines = progressBuffer.split(/\r?\n/u);
+    progressBuffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const stage = /^(STEP\d+\s+[\w-]+)/u.exec(line.trim())?.[1];
+      if (stage) console.log(`[harness-stage] id=${id} stage=${stage}`);
+    }
+  });
+  return validateHarnessReply(processResult.stdout, await readFile(replyFile, "utf8"));
 }
 
 async function readDeepSeekConfig(root) {
@@ -640,7 +638,7 @@ export async function createOliviaService(options = {}) {
 
   function getOfflineIdentity() {
     return {
-      uid: getSetting("offline_uid"),
+      uid: normalizeOfflineUid(getSetting("offline_uid")),
       nickname: getSetting("offline_nickname"),
     };
   }
